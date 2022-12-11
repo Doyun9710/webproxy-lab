@@ -1,4 +1,4 @@
-#include "/root/Jungle/Week_07/webproxy-lab/echo/csapp.h"
+#include "csapp.h"
 
 void echo(int connfd){
     size_t n;
