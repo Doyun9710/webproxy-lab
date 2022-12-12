@@ -11,11 +11,11 @@
 void doit(int fd);
 void read_requesthdrs(rio_t *rp);
 int parse_uri(char *uri, char *filename, char *cgiargs);
-void serve_static(char *method, int fd, char *filename, int filesize);
+void serve_static(int fd, char *filename, int filesize);
 void get_filetype(char *filename, char *filetype);
-void serve_dynamic(char *method, int fd, char *filename, char *cgiargs);
-void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
-                 char *longmsg);
+void serve_dynamic(int fd, char *filename, char *cgiargs);
+void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
+void echo(int connfd);
 
 int main(int argc, char **argv) {
   int listenfd, connfd;
@@ -36,10 +36,30 @@ int main(int argc, char **argv) {
     connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
     Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
     printf("Accepted connection from (%s, %s)\n", hostname, port);
+
+    // 숙제 11.6 A
+    // echo(connfd);
+
     // 트랜잭션 수행
     doit(connfd);
     // 자신 쪽의 연결 close
     Close(connfd);
+  }
+}
+
+// 숙제 11.6 A
+// telnet 43.200.183.216 5000
+// transmit -> hi, receive -> hi
+void echo(int connfd) {
+  size_t n;
+  char buf[MAXLINE];
+  rio_t rio;
+  Rio_readinitb(&rio, connfd);
+  while ((n = Rio_readlineb(&rio, buf, MAXLINE)) != 0) {
+    if (strcmp(buf, "\r\n") == 0)
+      break;
+    printf("server received %d bytes\n", (int)n);
+    Rio_writen(connfd, buf, n);
   }
 }
 
@@ -57,14 +77,13 @@ void doit(int fd){
   printf("%s", buf);
   sscanf(buf, "%s %s %s", method, uri, version);
 
-  /* only "GET" method is available in TINY SERVER */
   /*
   Tiny는 GET 메소드만 지원.
   만일 클라이언트가 다른 메소드(POST 같은)를 요청하면, 
   에러 메시지를 보내고,
   main 루틴으로 돌아오고,
   */ 
-  if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
+  if (strcasecmp(method, "GET")) {
     clienterror(fd, method, "501", "Not implemented", "Tiny does not implement this method");
     return;
   }
@@ -90,7 +109,7 @@ void doit(int fd){
       return;
     }
     // 만일 그렇다면 정적 컨텐츠를 클라이언트에게 제공
-    serve_static(method,fd, filename, sbuf.st_size);
+    serve_static(fd, filename, sbuf.st_size);
   }
   else{
     /* serve dynamic content */
@@ -100,7 +119,7 @@ void doit(int fd){
       return;
     }
     // 동적 컨텐츠 제공
-    serve_dynamic(method, fd, filename, cgiargs);
+    serve_dynamic(fd, filename, cgiargs);
   }
 }
 
@@ -115,10 +134,7 @@ void clienterror(int fd, char *cause, char *errnum, char *shortmsg,char *longmsg
 
   /* Build the HTTP response body */
   sprintf(body, "<html><title>Tiny Error</title>");
-  sprintf(body, "%s<body bgcolor= "
-                "ffffff"
-                ">\r\n",
-          body);
+  sprintf(body, "%s<body bgcolor= " "ffffff" ">\r\n", body);
   sprintf(body, "%s%s: %s\r\n", body, errnum, shortmsg);
   sprintf(body, "%s<p>%s: %s\r\n", body, longmsg, cause);
   sprintf(body, "%s<hr><em>The Tiny Web Server</em>\r\n", body);
@@ -192,7 +208,7 @@ int parse_uri(char *uri, char *filename, char *cgiargs) {
 /*
 지역 파일의 내용을 포함하고 있는 본체를 갖는 HTTP 응답을 보낸다.
 */
-void serve_static(char* method, int fd, char *filename, int filesize){
+void serve_static(int fd, char *filename, int filesize) {
   int srcfd;
   char *srcp, filetype[MAXLINE], buf[MAXBUF];
 
@@ -204,7 +220,9 @@ void serve_static(char* method, int fd, char *filename, int filesize){
   클라이언트에 응답 줄과 응답 헤더를 보낸다.
   빈 줄 한 개가 헤더를 종료하고 있다.
   */
+  // 숙제 11.6 C
   sprintf(buf, "HTTP/1.0 200 OK\r\n");
+  // sprintf(buf, "version : %s 200 OK\r\n", version);
   sprintf(buf, "%sServer: Tiny Web Server\r\n", buf);
   sprintf(buf, "%sConnection: close\r\n", buf);
   sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
@@ -240,6 +258,12 @@ void get_filetype(char *filename, char *filetype) {
     strcpy(filetype, "image/png");
   else if(strstr(filename, ".jpg"))
     strcpy(filetype, "image/jpeg");
+  // 숙제 11.7
+  // mpg 파일 미실행. mp4 가능. 왜???
+  else if (strstr(filename, ".mpg"))
+    strcpy(filetype, "video/mpg");
+  else if (strstr(filename, ".mp4"))
+    strcpy(filetype, "video/mp4");
   else
     strcpy(filetype, "text/plain");
  }
@@ -253,7 +277,7 @@ Tiny 는 자식 프로세스를 fork 하고,
 클라이언트에 성공을 알려주는 응답 라인을 보내는 것으로 시작
 CGI 프로그램은 응답의 나머지 부분을 보내야 한다.
 */
-void serve_dynamic(char* method, int fd, char*filename, char *cgiargs) {
+void serve_dynamic(int fd, char*filename, char *cgiargs) {
   char buf[MAXLINE], *emptylist[] = {NULL};
 
   /* Return first part of HTTP response */
@@ -264,7 +288,7 @@ void serve_dynamic(char* method, int fd, char*filename, char *cgiargs) {
   Rio_writen(fd, buf, strlen(buf));
 
   // 새로운 자식 프로세스를 fork 한다.
-  if(Fork() == 0){ /* Child */
+  if(Fork() == 0){
     /* Real server would set all CGI vars here */
     // 자식은 QUERY_STRING환경변수를 요청 URI의 CGI 인자들로 초기화
     setenv("QUERY_STRING", cgiargs, 1);
