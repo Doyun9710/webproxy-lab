@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
 
 // 숙제 11.6 A
 // telnet 43.200.183.216 5000
-// transmit -> hi, receive -> hi
+// request -> hi, receive -> hi
 void echo(int connfd) {
   size_t n;
   char buf[MAXLINE];
@@ -85,7 +85,9 @@ void doit(int fd){
   main 루틴으로 돌아오고,
   */ 
   // 숙제 11.11
-  // strcasecmp() 함수는 대소문자를 구분하지 않고 string1 및 string2를 비교한다.
+  // serve_static, serve_dynamic 함수 호출 시 매개변수 *method 추가
+  // *method --> 'GET' or 'HEAD' 판별 후 진행
+  // strcasecmp() 함수는 대소문자를 구분하지 않고 string1 및 string2를 비교한다. (걑으면 0 리턴)
   // string1 및 string2의 모든 영문자는 비교 전에 소문자로 변환한다.
   if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
     clienterror(fd, method, "501", "Not implemented", "Tiny does not implement this method");
@@ -249,15 +251,15 @@ void serve_static(char *method, int fd, char *filename, int filesize) {
   // 리눅스 mmap 함수는 요청한 파일을 가상메모리 영역으로 매핑한다.
   // mmap : 파일 srcfd 의 첫 번째 filesize 바이트를 
   //        주소 srcp 에서 시작하는 사적 읽기-허용 가상메모리 영역으로 매핑한다.
-  // srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
-  // // 파일을 메모리로 매핑한 후 식별자는 필요 없으므로 close. 메모리 누수 방지.
-  // Close(srcfd);
-  // // 클라이언트에 파일 전송
-  // // rio_writen : 주소 srcp 에서 시작하는 filesize 바이트를 클라이언트의 연결 식별자로 복사한다.
-  // Rio_writen(fd, srcp, filesize);
-  // // 매핑된 가상메모리 주소를 반환한다. 메모리 누수 방지.
-  // Munmap(srcp, filesize);
-
+  srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
+  // 파일을 메모리로 매핑한 후 식별자는 필요 없으므로 close. 메모리 누수 방지.
+  Close(srcfd);
+  // 클라이언트에 파일 전송
+  // rio_writen : 주소 srcp 에서 시작하는 filesize 바이트를 클라이언트의 연결 식별자로 복사한다.
+  Rio_writen(fd, srcp, filesize);
+  // 매핑된 가상메모리 주소를 반환한다. 메모리 누수 방지.
+  Munmap(srcp, filesize);
+/*
   // 숙제 11.9
   srcp = malloc(sizeof(char *) * filesize);
   // void rio_readinitb(rio_t, *rp, int fd) 함수는 식별자 fd를 주소 rp에 위치한 rio_t 타입의 읽기 버퍼와 연결한다.
@@ -265,6 +267,7 @@ void serve_static(char *method, int fd, char *filename, int filesize) {
   Close(srcfd);
   Rio_writen(fd, srcp, filesize);
   free(srcp);
+*/
 }
 
 /* get_filetype - Derive file type from filename */

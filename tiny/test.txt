@@ -1,0 +1,3 @@
+homework 11.6 C
+test.txt
+txt : open~!!!
