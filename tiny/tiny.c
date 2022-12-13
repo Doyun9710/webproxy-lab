@@ -262,7 +262,8 @@ void serve_static(char *method, int fd, char *filename, int filesize) {
 /*
   // 숙제 11.9
   srcp = malloc(sizeof(char *) * filesize);
-  // void rio_readinitb(rio_t, *rp, int fd) 함수는 식별자 fd를 주소 rp에 위치한 rio_t 타입의 읽기 버퍼와 연결한다.
+  // rio_readn(int fd, void *usrbuf, size_t n) 
+  // --> 식별자 fd의 현재 파일 위치에서 메모리 위치 usrbuf로 최대 n 바이트 전송
   Rio_readn(srcfd, srcp, filesize);
   Close(srcfd);
   Rio_writen(fd, srcp, filesize);
